@@ -1,3 +1,7 @@
+// txtkbd2kla project  
+// Copyright 2018 Philippe Quesnel  
+// Licensed under the Academic Free License version 3.0  
+
 package main
 
 import (
