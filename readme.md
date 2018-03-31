@@ -6,8 +6,8 @@ Very simple Go program to create KLA (keyboard layout Analyzer) JSON keyboard la
 
 KLA : http://shenafu.com/code/keyboard/klatest/#/main  
 
-The program reads a text qwerty layout as reference, then a similar text layout that gives the new character.  
-It then replaces the corresponding character in the template KLA file.  
+The program reads a text qwerty layout as reference, then a similar text layout that gives the new characters.  
+It then replaces the corresponding characters in the template KLA file.  
 Once all characters are mapped, the resulting JSON is output  to stdout.
 
 parameters: klaRefQwertyLayoutJson qwertyLayoutFile newLayoutFile [newLayoutFileAltGr]  
