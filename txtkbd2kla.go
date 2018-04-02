@@ -1,16 +1,13 @@
-// txtkbd2kla project  
-// Copyright 2018 Philippe Quesnel  
-// Licensed under the Academic Free License version 3.0  
-
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
-
-	"github.com/phques/txt2autokey/kbdRdr"
+	"regexp"
 )
 
 type Key struct {
@@ -32,209 +29,192 @@ type KlaKbd struct {
 	Keys         []Key          `json:"keys"`
 }
 
-func (kbd KlaKbd) changeChar(kbdDest *KlaKbd, fromb, tob byte) bool {
+//------------------------
+
+func showErrorExit() {
+	fmt.Fprintln(os.Stderr, "parameters: layer qwertyTemplateFile newLayoutFile")
+	fmt.Fprintln(os.Stderr, "The KLA JSON template is read from stdin, we act as a filter")
+	fmt.Fprintln(os.Stderr, "layer: primary, shift, altGr, shiftAltGr")
+	fmt.Fprintln(os.Stderr, "Can also be called to set label or author:")
+	fmt.Fprintln(os.Stderr, "  label: label")
+	fmt.Fprintln(os.Stderr, "  author: author")
+	os.Exit(-1)
+}
+
+func (kbd KlaKbd) changeChar(kbdDest *KlaKbd, fromb, tob byte, layerToMap string) bool {
+
 	from := int(fromb)
 	to := int(tob)
-	// go through keys, change found assigned char when found
+
+	// go through keys looking for 'from', change corresponding key in kbdDest to 'to'
 	for i, key := range kbd.Keys {
+		// we compare with primary..
+		// so care should be taken to map primary last if calling multiple times!
 		if key.Primary == from {
-			kbdDest.Keys[i].Primary = to
-			//			fmt.Printf("P %c => %c\n", fromb, tob)
-			return true
-		}
-		if key.Shift == from {
-			kbdDest.Keys[i].Shift = to
-			//			fmt.Printf("S %c => %c\n", fromb, tob)
-			return true
-		}
-	}
-	// !found !
-	fmt.Printf("char !found %c/%d\n", fromb, from)
-	return false
-}
-
-func (kbd KlaKbd) changeCharPrimary(kbdDest *KlaKbd, fromb, tob byte) bool {
-	from := int(fromb)
-	to := int(tob)
-	// go through keys, change found assigned char when found
-	for i, key := range kbd.Keys {
-		if key.Primary == from {
-			kbdDest.Keys[i].Primary = to
-			return true
-		}
-	}
-	// !found !
-	fmt.Printf("primary char !found %c/%d\n", fromb, from)
-	return false
-}
-
-func (kbd KlaKbd) changeCharShift(kbdDest *KlaKbd, fromb, tob byte) bool {
-	from := int(fromb)
-	to := int(tob)
-	// go through keys, change found assigned char when found
-	for i, key := range kbd.Keys {
-		if key.Shift == from {
-			kbdDest.Keys[i].Shift = to
-			return true
-		}
-	}
-	// !found !
-	fmt.Printf("shift char !found %c/%d\n", fromb, from)
-	return false
-}
-
-func (kbd KlaKbd) changeCharAltGr(kbdDest *KlaKbd, fromb, tob byte) bool {
-	from := int(fromb)
-	to := int(tob)
-	// go through keys, change found assigned char when found
-	for i, key := range kbd.Keys {
-		if key.Primary == from {
-			kbdDest.Keys[i].AltGr = to
-			return true
-		}
-	}
-	// !found !
-	fmt.Printf("altGr char !found %c/%d\n", fromb, from)
-	return false
-}
-
-func (kbd KlaKbd) changeCharShiftAltGr(kbdDest *KlaKbd, fromb, tob byte) bool {
-	from := int(fromb)
-	to := int(tob)
-	// go through keys, change found assigned char when found
-	for i, key := range kbd.Keys {
-		if key.Shift == from {
-			kbdDest.Keys[i].ShiftAltGr = to
-			return true
-		}
-	}
-	// !found !
-	fmt.Printf("char !found %c/%d\n", fromb, from)
-	return false
-}
-
-func (kbd *KlaKbd) mapKbd(kbdDest *KlaKbd, fromKbd, toKbd *kbdRdr.Keyboard) {
-	for i := 0; i < len(fromKbd.LowerCase); i++ {
-		lowerRowFrom := fromKbd.LowerCase[i]
-		upperRowFrom := fromKbd.UpperCase[i]
-		lowerRowTo := toKbd.LowerCase[i]
-		upperRowTo := toKbd.UpperCase[i]
-		for j := 0; j < len(lowerRowFrom); j++ {
-			kbd.changeCharPrimary(kbdDest, lowerRowFrom[j], lowerRowTo[j])
-			kbd.changeCharShift(kbdDest, upperRowFrom[j], upperRowTo[j])
-		}
-	}
-}
-
-func (kbd *KlaKbd) mapKbdAltGr(kbdDest *KlaKbd, fromKbd, toKbd *kbdRdr.Keyboard) {
-
-	for i := 0; i < len(fromKbd.LowerCase); i++ {
-		lowerRowFrom := fromKbd.LowerCase[i]
-		upperRowFrom := fromKbd.UpperCase[i]
-		lowerRowTo := toKbd.LowerCase[i]
-		upperRowTo := toKbd.UpperCase[i]
-		for j := 0; j < len(lowerRowFrom); j++ {
-			kbd.changeCharAltGr(kbdDest, lowerRowFrom[j], lowerRowTo[j])
-			// only map ShiftAltGr if different than AltGr
-			if upperRowTo[j] != lowerRowTo[j] {
-				kbd.changeCharShiftAltGr(kbdDest, upperRowFrom[j], upperRowTo[j])
+			switch layerToMap {
+			case "primary":
+				kbdDest.Keys[i].Primary = to
+			case "shift":
+				kbdDest.Keys[i].Shift = to
+			case "altGr":
+				kbdDest.Keys[i].AltGr = to
+			case "shiftAltGr":
+				kbdDest.Keys[i].ShiftAltGr = to
+			default:
+				fmt.Fprintf(os.Stderr, "not a known layer: %s\n", layerToMap)
+				return false
 			}
+			return true
 		}
+	}
+
+	// src key not found !
+	fmt.Fprintf(os.Stderr, "'from' char not found %c / %d in KLA template\n", fromb, from)
+	return false
+}
+
+//------------------------
+
+// read from/to kbd definition files and map onto klaKbdDest
+func mapKbd(klaKbdSrc, klaKbdDest *KlaKbd) {
+	if len(os.Args) != 4 {
+		showErrorExit()
+	}
+
+	layerToMap := os.Args[1]
+
+	fmt.Fprintf(os.Stderr, "mapping layer %s\n", layerToMap)
+
+	// read qwertyTemplateFile
+	fromFilename := os.Args[2]
+	fmt.Fprintf(os.Stderr, "  reading qwertyTemplateFile : %s\n", fromFilename)
+	qwertyTemplate, err := ioutil.ReadFile(fromFilename)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(-1)
+	}
+
+	// read newLayoutFile
+	toFilename := os.Args[3]
+	fmt.Fprintf(os.Stderr, "  reading newLayoutFile      : %s\n", toFilename)
+	newLayout, err := ioutil.ReadFile(toFilename)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(-1)
+	}
+
+	// remove all whitespace, keeps only the keys
+	re := regexp.MustCompile(`\s+`)
+
+	qwertyTemplate = re.ReplaceAllLiteral(qwertyTemplate, nil)
+	newLayout = re.ReplaceAllLiteral(newLayout, nil)
+
+	// check that from / to have the same length
+	emptySpotMarker := byte(0)
+	if len(newLayout) != len(qwertyTemplate) {
+		if len(newLayout) == len(qwertyTemplate)+1 {
+			// special case,
+			// extra 1st char in newlayout is the 'empty spot' character:
+			// any instance of it indicates a key that we dont map
+			emptySpotMarker = newLayout[0]
+			newLayout = newLayout[1:]
+		} else {
+			// error not same length
+			fmt.Fprintln(os.Stderr,
+				"the from / to layouts are not the same length",
+				len(qwertyTemplate), len(newLayout))
+			os.Exit(-1)
+		}
+	}
+
+	// go through from / to bytes
+	// map the corresponding 'from' key in KLA keyboard to 'to' char (into klaKbdDest)
+	for i, fromKey := range qwertyTemplate {
+		toChar := newLayout[i]
+		if toChar == emptySpotMarker {
+			// mark spot empty in destination
+			toChar = 0
+		}
+		klaKbdSrc.changeChar(klaKbdDest, fromKey, toChar, layerToMap)
 	}
 }
 
-func main() {
-	if len(os.Args) != 4 && len(os.Args) != 5 {
-		fmt.Println("parameters: klaRefQwertyLayoutJson qwertyLayoutFile newLayoutFile [newLayoutFileAltGr]")
-		os.Exit(-1)
-	}
+// read the KLA json template from stdin
+// (this app acts as a filter, multiple calls can be chained with pipes)
+func readKlaKbd() (*KlaKbd, *KlaKbd) {
+	fmt.Fprintln(os.Stderr, "reading KLA JSON fom stdin")
 
-	// get variables from command line
-	fromJsonFilename := os.Args[1]
-	fromFilename := os.Args[2]
-	toFilename := os.Args[3]
-	toFilenameAltGr := ""
-	//	toFilenameAltGr := nil
-	if len(os.Args) == 5 {
-		toFilenameAltGr = os.Args[4]
+	// read json as []byte from stdin
+	var jsonTemplateBuff bytes.Buffer
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		text := scanner.Bytes()
+		jsonTemplateBuff.Write(text)
+		jsonTemplateBuff.WriteString("\n")
 	}
+	jsonTemplateBytes := jsonTemplateBuff.Bytes()
 
-	// read JSON KLA template/ref qwerty
-	jsonstr, err := ioutil.ReadFile(fromJsonFilename)
+	// create a KlaKbd from the json template
+	var klaKbdSrc KlaKbd
+	err := json.Unmarshal(jsonTemplateBytes, &klaKbdSrc)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(-1)
-	}
-
-	// read 'from' keyboard def (eg. qwery30Main)
-	fmt.Fprintf(os.Stderr, "reading %s\n", fromFilename)
-	fromKbd := new(kbdRdr.Keyboard)
-	err = fromKbd.ReadKeyboardFile(fromFilename)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(-1)
-	}
-
-	//~ fmt.Printf("From  (%s)\n", fromFilename)
-	//~ fmt.Println(fromKbd.String())
-
-	// read 'to' keyboard def
-	fmt.Fprintf(os.Stderr, "reading %s\n", toFilename)
-	toKbd := new(kbdRdr.Keyboard)
-	err = toKbd.ReadKeyboardFile(toFilename)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(-1)
-	}
-
-	// read optional altGr kbd layer
-	var toKbdAltGr *kbdRdr.Keyboard
-	if toFilenameAltGr != "" {
-		fmt.Fprintf(os.Stderr, "reading %s\n", toFilenameAltGr)
-		toKbdAltGr = new(kbdRdr.Keyboard)
-		err = toKbdAltGr.ReadKeyboardFile(toFilenameAltGr)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(-1)
-		}
-	}
-
-	// check that they have the same layout
-	if fromKbd.LayoutString() != toKbd.LayoutString() {
-		fmt.Println("Error, the two keyboard must have the same layout")
-		os.Exit(-1)
-	}
-
-	if toKbdAltGr != nil {
-		if fromKbd.LayoutString() != toKbdAltGr.LayoutString() {
-			fmt.Println("Error, the two keyboard must have the same layout (altGr)")
-			os.Exit(-1)
-		}
-	}
-
-	// create a KlaKbd from the json Qwerty template
-	var klaKbd KlaKbd
-	//	jsonstr := getKbdJsonString()
-	err = json.Unmarshal([]byte(jsonstr), &klaKbd)
-	if err != nil {
-		fmt.Println("failed to unmarshall json kbd: ", err)
+		fmt.Fprintln(os.Stderr, "failed to unmarshall json kbd: ", err)
 		os.Exit(-1)
 	}
 
 	// make a 2nd one, this one will receive the changes
 	var klaKbdDest KlaKbd
-	err = json.Unmarshal([]byte(jsonstr), &klaKbdDest)
+	json.Unmarshal(jsonTemplateBytes, &klaKbdDest)
 
-	// map the keyboard!
-	klaKbd.mapKbd(&klaKbdDest, fromKbd, toKbd)
+	return &klaKbdSrc, &klaKbdDest
+}
 
-	// map the AltGr(s) layers of the keyboard!
-	if toKbdAltGr != nil {
-		// Only map ShiftAltGr if the shift layer is different than the primary
-		//		doShiftAltGr := !toKbdAltGr.LowerCase.Equal(toKbdAltGr.UpperCase)
-		klaKbd.mapKbdAltGr(&klaKbdDest, fromKbd, toKbdAltGr)
+func main() {
+
+	if len(os.Args) != 3 && len(os.Args) != 4 {
+		showErrorExit()
 	}
 
+	klaKbdSrc, klaKbdDest := readKlaKbd()
+
+	// check command to execute
+	command := os.Args[1]
+
+	switch command {
+	case "label:":
+		if len(os.Args) != 3 {
+			showErrorExit()
+		}
+		klaKbdDest.Label = os.Args[2]
+		fmt.Fprintln(os.Stderr, "  changing label: ", klaKbdDest.Label)
+
+	case "author:":
+		if len(os.Args) != 3 {
+			showErrorExit()
+		}
+		klaKbdDest.Author = os.Args[2]
+		fmt.Fprintln(os.Stderr, "  changing author: ", klaKbdDest.Author)
+
+	case "primary":
+		mapKbd(klaKbdSrc, klaKbdDest)
+	case "shift":
+		mapKbd(klaKbdSrc, klaKbdDest)
+	case "altGr":
+		mapKbd(klaKbdSrc, klaKbdDest)
+	case "shiftAltGr":
+		mapKbd(klaKbdSrc, klaKbdDest)
+
+	default:
+		fmt.Fprintln(os.Stderr, "unkown command :", command)
+		showErrorExit()
+	}
+
+	// output th resulting KLA JSON
 	resJson, err := json.MarshalIndent(klaKbdDest, "", "  ")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "failed to create json result: ", err)
+		os.Exit(-1)
+	}
+
 	fmt.Printf("%s\n", resJson)
 }
