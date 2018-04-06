@@ -45,6 +45,9 @@ func (kbd KlaKbd) changeChar(kbdDest *KlaKbd, fromb, tob byte, layerToMap string
 
 	from := int(fromb)
 	to := int(tob)
+    if to == 0 {
+        to = -1
+    }
 
 	// go through keys looking for 'from', change corresponding key in kbdDest to 'to'
 	for i, key := range kbd.Keys {
