@@ -1,5 +1,5 @@
 {
-    "label": "QWERTY Ref Lasalle 20 + digits",
+    "label": "QWERTY Ref Lasalle 22 + digits",
     "fingerStart": {
         "1": 25,
         "2": 14,
@@ -423,8 +423,8 @@
             "shiftAltGr": -1
         },
         {
-            "primary": -1,
-            "shift": -1,
+            "primary": 44,
+            "shift": 60,
             "finger": 8,
             "id": 46,
             "altGr": -1,
@@ -432,10 +432,10 @@
             "numpad": -1
         },
         {
-            "primary": -1,
+            "primary": 46,
             "finger": 9,
             "id": 47,
-            "shift": -1,
+            "shift": 62,
             "altGr": -1,
             "shiftAltGr": -1,
             "numpad": -1
