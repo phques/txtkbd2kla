@@ -1,3 +1,4 @@
+// small 'filter' program to set the characters in a KLA layout JSON File
 package main
 
 import (
@@ -45,9 +46,10 @@ func (kbd KlaKbd) changeChar(kbdDest *KlaKbd, fromb, tob byte, layerToMap string
 
 	from := int(fromb)
 	to := int(tob)
-    if to == 0 {
-        to = -1
-    }
+	if to == 0 {
+		to = -1
+	}
+	// fmt.Fprintf(os.Stderr, "%c : %c\n", from, to)
 
 	// go through keys looking for 'from', change corresponding key in kbdDest to 'to'
 	for i, key := range kbd.Keys {
@@ -77,6 +79,36 @@ func (kbd KlaKbd) changeChar(kbdDest *KlaKbd, fromb, tob byte, layerToMap string
 }
 
 //------------------------
+
+// read special tokens space=? and empty=? prefixes tokens
+// they are removed from newLayout
+func readSpecialTokens(newLayout []byte) (retLayout []byte, emptySpotMarker, spaceMarker byte) {
+	emptySpotMarker = byte(0)
+	spaceMarker = byte(0)
+
+	for {
+		switch string(newLayout[0:6]) {
+
+		// check for empty=? instruction
+		// set the character used to indicate the empty spot marker
+		case "empty=":
+			emptySpotMarker = newLayout[6]
+			newLayout = newLayout[7:]
+			fmt.Fprintf(os.Stderr, "  empty = %c\n", emptySpotMarker)
+
+		// check for space=? instruction
+		// set the character used to indicate Space character
+		case "space=":
+			spaceMarker = newLayout[6]
+			newLayout = newLayout[7:]
+			fmt.Fprintf(os.Stderr, "  space = %c\n", spaceMarker)
+
+		default:
+			retLayout = newLayout
+			return
+		}
+	}
+}
 
 // read from/to kbd definition files and map onto klaKbdDest
 func mapKbd(klaKbdSrc, klaKbdDest *KlaKbd) {
@@ -112,28 +144,31 @@ func mapKbd(klaKbdSrc, klaKbdDest *KlaKbd) {
 	qwertyTemplate = re.ReplaceAllLiteral(qwertyTemplate, nil)
 	newLayout = re.ReplaceAllLiteral(newLayout, nil)
 
-	// check that from / to have the same length
+	// read special tokens space=? and empty=?
 	emptySpotMarker := byte(0)
+	spaceMarker := byte(0)
+	newLayout, emptySpotMarker, spaceMarker = readSpecialTokens(newLayout)
+
+	// check that from / to have the same length
 	if len(newLayout) != len(qwertyTemplate) {
-		if len(newLayout) == len(qwertyTemplate)+1 {
-			// special case,
-			// extra 1st char in newlayout is the 'empty spot' character:
-			// any instance of it indicates a key that we dont map
-			emptySpotMarker = newLayout[0]
-			newLayout = newLayout[1:]
-		} else {
-			// error not same length
-			fmt.Fprintln(os.Stderr,
-				"the from / to layouts are not the same length",
-				len(qwertyTemplate), len(newLayout))
-			os.Exit(-1)
-		}
+		// error not same length
+		fmt.Fprintln(os.Stderr,
+			"the from / to layouts are not the same length",
+			len(qwertyTemplate), len(newLayout))
+
+		fmt.Fprintln(os.Stderr, "You can use space=? and/or empty=? at beginning of files")
+
+		os.Exit(-1)
 	}
 
 	// go through from / to bytes
 	// map the corresponding 'from' key in KLA keyboard to 'to' char (into klaKbdDest)
 	for i, fromKey := range qwertyTemplate {
 		toChar := newLayout[i]
+
+		if toChar == spaceMarker {
+			toChar = ' '
+		}
 		if toChar == emptySpotMarker {
 			// mark spot empty in destination
 			toChar = 0
@@ -145,7 +180,7 @@ func mapKbd(klaKbdSrc, klaKbdDest *KlaKbd) {
 // read the KLA json template from stdin
 // (this app acts as a filter, multiple calls can be chained with pipes)
 func readKlaKbd() (*KlaKbd, *KlaKbd) {
-	fmt.Fprintln(os.Stderr, "reading KLA JSON fom stdin")
+	// fmt.Fprintln(os.Stderr, "reading KLA JSON fom stdin")
 
 	// read json as []byte from stdin
 	var jsonTemplateBuff bytes.Buffer
@@ -189,14 +224,14 @@ func main() {
 			showErrorExit()
 		}
 		klaKbdDest.Label = os.Args[2]
-		fmt.Fprintln(os.Stderr, "  changing label: ", klaKbdDest.Label)
+		fmt.Fprintln(os.Stderr, "changing label: ", klaKbdDest.Label)
 
 	case "author:":
 		if len(os.Args) != 3 {
 			showErrorExit()
 		}
 		klaKbdDest.Author = os.Args[2]
-		fmt.Fprintln(os.Stderr, "  changing author: ", klaKbdDest.Author)
+		fmt.Fprintln(os.Stderr, "changing author: ", klaKbdDest.Author)
 
 	case "primary":
 		mapKbd(klaKbdSrc, klaKbdDest)
@@ -218,6 +253,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, "failed to create json result: ", err)
 		os.Exit(-1)
 	}
-
 	fmt.Printf("%s\n", resJson)
+
 }
