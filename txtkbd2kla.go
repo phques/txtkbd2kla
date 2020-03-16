@@ -16,6 +16,7 @@ type Key struct {
 	Shift      int `json:"shift"`
 	AltGr      int `json:"altGr"`
 	ShiftAltGr int `json:"shiftAltGr"`
+	Numpad     int `json:"numpad"`
 	Finger     int `json:"finger"`
 	Id         int `json:"id"`
 }
