@@ -31,6 +31,12 @@ type KlaKbd struct {
 	Keys         []Key          `json:"keys"`
 }
 
+type Markers struct {
+	EmptySpot byte
+	Space     byte
+	Enter     byte
+}
+
 //------------------------
 
 func showErrorExit() {
@@ -83,9 +89,7 @@ func (kbd KlaKbd) changeChar(kbdDest *KlaKbd, fromb, tob byte, layerToMap string
 
 // read special tokens space=? and empty=? prefixes tokens
 // they are removed from newLayout
-func readSpecialTokens(newLayout []byte) (retLayout []byte, emptySpotMarker, spaceMarker byte) {
-	emptySpotMarker = byte(0)
-	spaceMarker = byte(0)
+func readSpecialTokens(newLayout []byte) (retLayout []byte, markers Markers) {
 
 	for {
 		switch string(newLayout[0:6]) {
@@ -93,16 +97,23 @@ func readSpecialTokens(newLayout []byte) (retLayout []byte, emptySpotMarker, spa
 		// check for empty=? instruction
 		// set the character used to indicate the empty spot marker
 		case "empty=":
-			emptySpotMarker = newLayout[6]
+			markers.EmptySpot = newLayout[6]
 			newLayout = newLayout[7:]
-			fmt.Fprintf(os.Stderr, "  empty = %c\n", emptySpotMarker)
+			fmt.Fprintf(os.Stderr, "  empty = %c\n", markers.EmptySpot)
 
 		// check for space=? instruction
 		// set the character used to indicate Space character
 		case "space=":
-			spaceMarker = newLayout[6]
+			markers.Space = newLayout[6]
 			newLayout = newLayout[7:]
-			fmt.Fprintf(os.Stderr, "  space = %c\n", spaceMarker)
+			fmt.Fprintf(os.Stderr, "  space = %c\n", markers.Space)
+
+		// check for enter=? instruction
+		// set the character used to indicate Space character
+		case "enter=":
+			markers.Enter = newLayout[6]
+			newLayout = newLayout[7:]
+			fmt.Fprintf(os.Stderr, "  enter = %c\n", markers.Enter)
 
 		default:
 			retLayout = newLayout
@@ -145,10 +156,10 @@ func mapKbd(klaKbdSrc, klaKbdDest *KlaKbd) {
 	qwertyTemplate = re.ReplaceAllLiteral(qwertyTemplate, nil)
 	newLayout = re.ReplaceAllLiteral(newLayout, nil)
 
-	// read special tokens space=? and empty=?
-	emptySpotMarker := byte(0)
-	spaceMarker := byte(0)
-	newLayout, emptySpotMarker, spaceMarker = readSpecialTokens(newLayout)
+	// read special tokens space=? and empty=? enter=?
+	// emptySpotMarker := byte(0)
+	// spaceMarker := byte(0)
+	newLayout, markers := readSpecialTokens(newLayout)
 
 	// check that from / to have the same length
 	if len(newLayout) != len(qwertyTemplate) {
@@ -167,13 +178,16 @@ func mapKbd(klaKbdSrc, klaKbdDest *KlaKbd) {
 	for i, fromKey := range qwertyTemplate {
 		toChar := newLayout[i]
 
-		if toChar == spaceMarker {
+		if toChar == markers.Space {
 			toChar = ' '
 		}
-		if toChar == emptySpotMarker {
-			// mark spot empty in destination
-			toChar = 0
+		if toChar == markers.Enter {
+			toChar = '\r'
 		}
+		if toChar == markers.EmptySpot {
+			toChar = 0 // mark spot empty in destination
+		}
+
 		klaKbdSrc.changeChar(klaKbdDest, fromKey, toChar, layerToMap)
 	}
 }
